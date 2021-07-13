@@ -252,7 +252,7 @@ void SE3Base<_Derived>::quat(const Eigen::MatrixBase<_EigenDerived>& quaternion)
   using std::abs;
   assert_vector_dim(quaternion, 4);
   MANIF_ASSERT(abs(quaternion.norm()-Scalar(1)) <
-               Constants<Scalar>::eps_s,
+               Constants<Scalar>::eps,
                "The quaternion is not normalized !",
                invalid_argument);
 
@@ -386,12 +386,13 @@ SE3Base<_Derived>::adj() const
   ///
   /// considering vee(log(g)) = (v;w)
 
-  Jacobian Adj = Jacobian::Zero();
+  Jacobian Adj;
   Adj.template topLeftCorner<3,3>() = rotation();
   Adj.template bottomRightCorner<3,3>() =
       Adj.template topLeftCorner<3,3>();
-  Adj.template topRightCorner<3,3>() =
+  Adj.template topRightCorner<3,3>().noalias() =
     skew(translation()) * Adj.template topLeftCorner<3,3>();
+  Adj.template bottomLeftCorner<3,3>().setZero();
 
   return Adj;
 }
@@ -452,10 +453,11 @@ struct AssignmentEvaluatorImpl<SE3Base<Derived>>
     using std::abs;
     MANIF_ASSERT(
       abs(data.template tail<4>().norm()-typename SE3Base<Derived>::Scalar(1)) <
-      Constants<typename SE3Base<Derived>::Scalar>::eps_s,
+      Constants<typename SE3Base<Derived>::Scalar>::eps,
       "SE3 assigned data not normalized !",
       manif::invalid_argument
     );
+    MANIF_UNUSED_VARIABLE(data);
   }
 };
 

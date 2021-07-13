@@ -154,7 +154,7 @@ typename SO3Base<_Derived>::Transformation
 SO3Base<_Derived>::transform() const
 {
   Transformation T = Transformation::Identity();
-  T.template block<3,3>(0,0) = rotation();
+  T.template topLeftCorner<3,3>() = rotation();
   return T;
 }
 
@@ -236,16 +236,15 @@ SO3Base<_Derived>::log(OptJacobianRef J_t_m) const
 
   if (J_t_m)
   {
+    J_t_m->setIdentity();
+    J_t_m->noalias() += Scalar(0.5) * tan.hat();
     Scalar theta2 = tan.coeffs().squaredNorm();
-    typename Tangent::LieAlg W = tan.hat();
-    if (theta2 <= Constants<Scalar>::eps)
-      J_t_m->noalias() = Jacobian::Identity() + Scalar(0.5) * W; // Small angle approximation
-    else
+    if (theta2 > Constants<Scalar>::eps)
     {
       Scalar theta = sqrt(theta2);  // rotation angle
-      Jacobian M;
-      M.noalias() = (Scalar(1) / theta2 - (Scalar(1) + cos(theta)) / (Scalar(2) * theta * sin(theta))) * (W * W);
-      J_t_m->noalias() = Jacobian::Identity() + Scalar(0.5) * W + M; //is this really more optimized?
+      J_t_m->noalias() +=
+        (Scalar(1) / theta2 - (Scalar(1) + cos(theta)) / (Scalar(2) * theta * sin(theta))) *
+        tan.hat() * tan.hat();
     }
   }
 
@@ -287,10 +286,9 @@ SO3Base<_Derived>::compose(
 
   const Scalar ret_sqnorm = ret_q.squaredNorm();
 
-  if (abs(ret_sqnorm-Scalar(1)) > Constants<Scalar>::eps_s)
+  if (abs(ret_sqnorm-Scalar(1)) > Constants<Scalar>::eps)
   {
-    const Scalar scale = approxSqrtInv(ret_sqnorm);
-    ret_q.coeffs() *= scale;
+    ret_q.coeffs() *= approxSqrtInv(ret_sqnorm);
   }
 
   return LieGroup(ret_q);
@@ -308,7 +306,7 @@ SO3Base<_Derived>::act(const Eigen::MatrixBase<_EigenDerived> &v,
 
   if (J_vout_m)
   {
-    (*J_vout_m) = -R * skew(v);
+    J_vout_m->noalias() = -R * skew(v);
   }
 
   if (J_vout_v)
@@ -382,7 +380,7 @@ void SO3Base<_Derived>::quat(const Eigen::MatrixBase<_EigenDerived>& quaternion)
   using std::abs;
   assert_vector_dim(quaternion, 4);
   MANIF_ASSERT(abs(quaternion.norm()-Scalar(1)) <
-               Constants<Scalar>::eps_s,
+               Constants<Scalar>::eps,
                "The quaternion is not normalized !",
                invalid_argument);
 
@@ -415,10 +413,11 @@ struct AssignmentEvaluatorImpl<SO3Base<Derived>>
     using std::abs;
     MANIF_ASSERT(
       abs(data.norm()-typename SO3Base<Derived>::Scalar(1)) <
-      Constants<typename SO3Base<Derived>::Scalar>::eps_s,
+      Constants<typename SO3Base<Derived>::Scalar>::eps,
       "SO3 assigned data not normalized !",
       manif::invalid_argument
     );
+    MANIF_UNUSED_VARIABLE(data);
   }
 };
 
